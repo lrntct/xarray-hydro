@@ -1,0 +1,42 @@
+[project]
+name = "xarray-hydrology"
+version = "0.1.0"
+description = "Hydrology tools for xarray"
+readme = "README.md"
+authors = [
+    {name = "Xóchitl Peñaloza Rueda", email = "xocuva@gmail.com"},
+    {name = "Laurent Courty", email = "lrntct@gmail.com"},
+]
+license = "MIT"
+keywords = ["science", "engineering", "hydrology"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Hydrology",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "geopandas>=1.1.1",
+    "numpy>=2.3.2",
+    "pandas>=2.3.2",
+    "polygongrid>=0.1.0",
+    "xarray[io,parallel]>=2025.8.0",
+    "xvec>=0.5.1",
+    "zarr>=3.1.2",
+]
+
+[project.urls]
+# Homepage = ""
+# Documentation = ""
+# Repository = ""
+# Issues = ""
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+    "ruff>=0.12.11",
+    "sphinx>=8.2.3",
+]
