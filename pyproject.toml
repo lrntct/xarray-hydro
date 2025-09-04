@@ -7,7 +7,7 @@ authors = [
     {name = "Xóchitl Peñaloza Rueda", email = "xocuva@gmail.com"},
     {name = "Laurent Courty", email = "lrntct@gmail.com"},
 ]
-license = "MIT"
+license = "Apache-2.0"
 keywords = ["science", "engineering", "hydrology"]
 classifiers = [
     "Development Status :: 4 - Beta",
