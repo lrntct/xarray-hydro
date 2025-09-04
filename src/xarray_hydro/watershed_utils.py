@@ -1,5 +1,7 @@
 from copy import deepcopy
 
+# Necessary for weighted mean
+import xvec  # noqa: F401
 import numpy as np
 import geopandas as gpd
 import xarray as xr
@@ -92,6 +94,38 @@ def get_representative_points(intersect: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     return intersect_copy
 
 
+def weighted_mean(
+    dataset: xr.Dataset | xr.DataArray,
+    representative_points: gpd.GeoDataFrame,
+    catchment_id: str,
+    x_coords: str,
+    y_coords: str,
+) -> xr.Dataset:
+    """Compute the weighted mean of each variables in 'dataset'."""
+    # extract values of dataset variables at each representative points
+    extracted = dataset.xvec.extract_points(
+        representative_points["geometry"],
+        x_coords="longitude",
+        y_coords="latitude",
+        index=False,
+    )
+    # Replace the newly created "geometry" dimension with catchment ID
+    extracted["geometry"] = representative_points[catchment_id].to_numpy()
+    extracted = extracted.rename(geometry=catchment_id)
+
+    # Calculate total catchment area
+    representative_points.index = representative_points[catchment_id]
+    representative_points.drop(catchment_id, axis=1, inplace=True)
+    ds_representative_points = representative_points.to_xarray()
+    total_catchment_area = ds_representative_points.groupby(catchment_id).sum()["intersected_area"]
+
+    # Apply area-weighted mean calculation to all data variables
+    area_weighted = extracted * ds_representative_points["intersected_area"]
+    sum_by_catchment = area_weighted.groupby(catchment_id, restore_coord_dims=True).sum()
+    val_mean = sum_by_catchment / total_catchment_area
+    return val_mean
+
+
 def get_mean_values(
     dataset: xr.Dataset | xr.DataArray,
     catchments: gpd.GeoDataFrame,
@@ -110,6 +144,7 @@ def get_mean_values(
         raise ValueError("'catchments' must have a crs.")
     if catchments.crs != dataset_crs:
         raise ValueError("'catchments' and 'dataset' crs must match.")
+    # TODO: check if catchment_id is present in catchments
 
     # Get the vector grid
     grid = get_grid_from_dataset(dataset, x_coords, y_coords)
@@ -118,7 +153,13 @@ def get_mean_values(
     # Get the surface areas of each sub-catchments
     intersected_areas = get_intersected_areas(catchments_grid_intersections)
     # Get representative points for each sub-catchments
-    intersected_nodes = get_representative_points(intersected_areas)
-    print(intersected_areas)
-    print(intersected_nodes)
-    return None
+    representative_points = get_representative_points(intersected_areas)
+    # Finally, calculate the weighted mean
+    ds_mean = weighted_mean(
+        dataset,
+        representative_points,
+        catchment_id=catchment_id,
+        x_coords=x_coords,
+        y_coords=y_coords,
+    )
+    return ds_mean

@@ -37,22 +37,14 @@ def main():
         parallel=True,
     )
     ds_era5.attrs["crs_wkt"] = pyproj.CRS.from_epsg(4326).to_wkt()
+    print(f"{ds_era5=}")
+    print(f"{watershed=}")
 
-    mean_values = get_mean_values(
+    mean_values_original = get_mean_values(
         ds_era5, watershed, catchment_id="nodeID", x_coords="longitude", y_coords="latitude"
     )
-    print(mean_values)
+    print(f"{mean_values_original=}")
 
-    ############################
-    ## Generar shape de poligonos de los pixeles que abarcan los datos de ERA5 descargados
-    # Pendiente buscar otra alternativa para generar el grid a partir del raster
-    # df_era5 = xr.open_dataset(
-    #     path
-    #     / Path("input")
-    #     / Path("era5_total_precipitation_2020_hourly_118W-86W_14N-34N_ensemble.nc")
-    # )
-    # grid = get_grid_from_dataset(df_era5)
-    # print(grid)
 
     assert False
 
