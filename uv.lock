@@ -1759,12 +1759,13 @@ parallel = [
 [[package]]
 name = "xarray-hydrology"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "geopandas" },
     { name = "numpy" },
     { name = "pandas" },
     { name = "polygongrid" },
+    { name = "pyproj" },
     { name = "xarray", extra = ["io", "parallel"] },
     { name = "xvec" },
     { name = "zarr" },
@@ -1783,6 +1784,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.3.2" },
     { name = "pandas", specifier = ">=2.3.2" },
     { name = "polygongrid", specifier = ">=0.1.0" },
+    { name = "pyproj", specifier = ">=3.7.2" },
     { name = "xarray", extras = ["io", "parallel"], specifier = ">=2025.8.0" },
     { name = "xvec", specifier = ">=0.5.1" },
     { name = "zarr", specifier = ">=3.1.2" },
