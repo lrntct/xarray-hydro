@@ -6,7 +6,7 @@ import geopandas as gpd
 import xarray as xr
 import pyproj
 
-from xarray_hydro.watershed_utils import get_mean_values, get_mean_values_xvect
+from xarray_hydro.watershed_utils import get_mean_values
 
 import matplotlib.pyplot as plt
 
@@ -281,9 +281,6 @@ def main():
     calc_means = xr.open_dataset(mean_zarr_path)
     print("\nCalculated means:")
     print(calc_means)
-
-    # Compare datasets
-    # compare_datasets(ref_means, calc_means)
 
     # Create plots
     common_vars = set(ref_means.data_vars) & set(calc_means.data_vars)

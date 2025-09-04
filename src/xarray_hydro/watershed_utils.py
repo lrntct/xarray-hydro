@@ -189,38 +189,3 @@ def get_mean_values(
         y_coords=y_coords,
     )
     return ds_mean
-
-
-def get_mean_values_xvect(
-    dataset: xr.Dataset | xr.DataArray,
-    catchments: gpd.GeoDataFrame,
-    catchment_id: str,
-    x_coords: str = "longitude",
-    y_coords: str = "latitude",
-) -> xr.Dataset:
-    """Return the mean value of each dataset variable and each catchment.
-    CRS of the dataset is taken from the attribute 'crs_wkt'.
-    """
-    try:
-        dataset_crs = pyproj.CRS.from_wkt(dataset.attrs["crs_wkt"])
-    except Exception:
-        raise ValueError("'dataset' must have a parsable 'crs_wkt' attribute.")
-    if catchments.crs is None:
-        raise ValueError("'catchments' must have a crs.")
-    if catchments.crs != dataset_crs:
-        raise ValueError("'catchments' and 'dataset' crs must match.")
-    # TODO: check if catchment_id is present in catchments
-
-    catchments.index = catchments[catchment_id]
-    catchments.drop(catchment_id, axis=1, inplace=True)
-
-    ds_mean = dataset.xvec.zonal_stats(
-        geometry=catchments["geometry"],
-        x_coords=x_coords,
-        y_coords=y_coords,
-        stats="mean",
-        index=True,
-        method="exactextract",
-        n_jobs=-1,
-    )
-    return ds_mean
