@@ -19,11 +19,13 @@ classifiers = [
 ]
 requires-python = ">=3.11"
 dependencies = [
+    "exactextract>=0.2.2",
     "geopandas>=1.1.1",
     "numpy>=2.3.2",
     "pandas>=2.3.2",
     "polygongrid>=0.1.0",
     "pyproj>=3.7.2",
+    "rioxarray>=0.19.0",
     "xarray[io,parallel]>=2025.8.0",
     "xvec>=0.5.1",
     "zarr>=3.1.2",
@@ -37,8 +39,10 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "matplotlib>=3.10.6",
     "pytest>=8.4.1",
     "ruff>=0.12.11",
+    "seaborn>=0.13.2",
     "sphinx>=8.2.3",
 ]
 

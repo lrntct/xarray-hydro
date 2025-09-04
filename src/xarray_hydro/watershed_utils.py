@@ -117,12 +117,22 @@ def weighted_mean(
     representative_points.index = representative_points[catchment_id]
     representative_points.drop(catchment_id, axis=1, inplace=True)
     ds_representative_points = representative_points.to_xarray()
-    total_catchment_area = ds_representative_points.groupby(catchment_id).sum()["intersected_area"]
+    total_catchment_area = ds_representative_points.groupby(catchment_id).sum()[
+        "intersected_area"
+    ]
 
     # Apply area-weighted mean calculation to all data variables
     area_weighted = extracted * ds_representative_points["intersected_area"]
-    sum_by_catchment = area_weighted.groupby(catchment_id, restore_coord_dims=True).sum()
+    sum_by_catchment = area_weighted.groupby(
+        catchment_id, restore_coord_dims=True
+    ).sum()
     val_mean = sum_by_catchment / total_catchment_area
+
+    # Preserve CRS and data type
+    val_mean.attrs["crs_wkt"] = dataset.attrs["crs_wkt"]
+    for var_name in val_mean.data_vars:
+        input_dtype = dataset[var_name].dtype
+        val_mean[var_name] = val_mean[var_name].astype(input_dtype)
     return val_mean
 
 
@@ -161,5 +171,40 @@ def get_mean_values(
         catchment_id=catchment_id,
         x_coords=x_coords,
         y_coords=y_coords,
+    )
+    return ds_mean
+
+
+def get_mean_values_xvect(
+    dataset: xr.Dataset | xr.DataArray,
+    catchments: gpd.GeoDataFrame,
+    catchment_id: str,
+    x_coords: str = "longitude",
+    y_coords: str = "latitude",
+) -> xr.Dataset:
+    """Return the mean value of each dataset variable and each catchment.
+    CRS of the dataset is taken from the attribute 'crs_wkt'.
+    """
+    try:
+        dataset_crs = pyproj.CRS.from_wkt(dataset.attrs["crs_wkt"])
+    except Exception:
+        raise ValueError("'dataset' must have a parsable 'crs_wkt' attribute.")
+    if catchments.crs is None:
+        raise ValueError("'catchments' must have a crs.")
+    if catchments.crs != dataset_crs:
+        raise ValueError("'catchments' and 'dataset' crs must match.")
+    # TODO: check if catchment_id is present in catchments
+
+    catchments.index = catchments[catchment_id]
+    catchments.drop(catchment_id, axis=1, inplace=True)
+
+    ds_mean = dataset.xvec.zonal_stats(
+        geometry=catchments["geometry"],
+        x_coords=x_coords,
+        y_coords=y_coords,
+        stats="mean",
+        index=True,
+        method="exactextract",
+        n_jobs=-1,
     )
     return ds_mean
