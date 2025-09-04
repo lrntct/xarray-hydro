@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import numpy as np
 import geopandas as gpd
 import xarray as xr
@@ -45,14 +47,13 @@ def get_grid_from_dataset(
     # GeoJSON to geopandas
     ds_crs = pyproj.CRS.from_wkt(dataset.attrs["crs_wkt"])
     df_grid = gpd.GeoDataFrame.from_features(my_grid.geojson["features"], crs=ds_crs)
-    return df_grid
+    # drop uneeded columns
+    return df_grid.drop(["cell_id", "row", "column"], axis=1)
 
 
-def get_intersected_areas(
-    intersect: gpd.GeoDataFrame, catchment_id: str
-) -> gpd.GeoDataFrame:
+def get_intersected_areas(intersect: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """Return areas of the intersection between the catchments and the raster grid.
-    If input CRS is not projected, a custom Equal Earth projection is used with:
+    If input CRS is not projected, the areas are computed with a custom Equal Earth projection:
     - same ellipsoid as the input CRS,
     - latitude of origin centered on the region of interest
     """
@@ -75,35 +76,20 @@ def get_intersected_areas(
         )
         assert crs_eqearth.is_projected
         # Apply projection
-        intersect = intersect.to_crs(crs_eqearth)
+        intersect_reproj = intersect.to_crs(crs_eqearth)
+    else:
+        intersect_reproj = intersect
 
     # Compute the area
-    intersect["intersected_area"] = intersect.area
-    # Keep only catchment ID and calculated area
-    intersect_area = intersect[[catchment_id, "intersected_area"]]
-    return intersect_area
+    intersect["intersected_area"] = intersect_reproj.area
+    return intersect
 
 
-def get_intersect_nodes(intersect: gpd.GeoDataFrame):
-    """⚠️ TODO"""
-    ## Generar puntos representativos en los poligonos resultantes de la intersección entre cuencas y el grid.
-    intersection_representative_points = intersect.representative_point()
-    d = {
-        "No": np.arange(0, len(intersect)),
-        "geometry": intersection_representative_points,
-    }  # ❓ why doing that?
-    intersection_representative_points = gpd.GeoDataFrame(d, crs=intersect.crs)
-    # print()
-    assert intersection_representative_points.crs is not None
-
-    ## Copiar el nodeID de las áreas intersectadas a los puntos representativos
-    points_id = intersect.sjoin(
-        intersection_representative_points, how="right", predicate="contains"
-    )
-    points_id = points_id[["nodeID", "geometry"]]
-    assert points_id.crs is not None
-    points_id_coor = gpd.GeoSeries(points_id["geometry"])
-    assert points_id_coor.crs is not None
+def get_representative_points(intersect: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Return the representative points of each areas in the input dataframe."""
+    intersect_copy = intersect.copy()
+    intersect_copy["geometry"] = intersect.representative_point()
+    return intersect_copy
 
 
 def get_mean_values(
@@ -125,11 +111,14 @@ def get_mean_values(
     if catchments.crs != dataset_crs:
         raise ValueError("'catchments' and 'dataset' crs must match.")
 
+    # Get the vector grid
     grid = get_grid_from_dataset(dataset, x_coords, y_coords)
+    # Intersect the catchments with the grid
     catchments_grid_intersections = grid.overlay(catchments, how="intersection")
-
-    intersected_areas = get_intersected_areas(
-        catchments_grid_intersections, catchment_id
-    )
+    # Get the surface areas of each sub-catchments
+    intersected_areas = get_intersected_areas(catchments_grid_intersections)
+    # Get representative points for each sub-catchments
+    intersected_nodes = get_representative_points(intersected_areas)
     print(intersected_areas)
+    print(intersected_nodes)
     return None
