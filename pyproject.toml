@@ -42,7 +42,6 @@ dev = [
     "matplotlib>=3.10.6",
     "pytest>=8.4.1",
     "ruff>=0.12.11",
-    "seaborn>=0.13.2",
     "sphinx>=8.2.3",
 ]
 
