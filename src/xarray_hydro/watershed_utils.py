@@ -17,15 +17,12 @@ Copyright [2025] The authors
 from copy import deepcopy
 
 # Necessary for weighted mean
-import xvec  # noqa: F401
 import numpy as np
 import geopandas as gpd
 import xarray as xr
-import polygongrid as pg
 import pyproj
 import shapely
-from time import time
-t0 = time()
+
 
 def _calculate_res(coords_arr_np: np.ndarray) -> float | None:
     if coords_arr_np is not None and len(coords_arr_np) >= 2:
@@ -37,7 +34,7 @@ def _calculate_res(coords_arr_np: np.ndarray) -> float | None:
         return None
 
 
-def get_grid_from_dataset(
+def polygon_grid_from_dataset(
     dataset: xr.Dataset | xr.DataArray,
     x_coords: str = "longitude",
     y_coords: str = "latitude",
@@ -63,16 +60,16 @@ def get_grid_from_dataset(
     return df_grid
 
 
-def get_intersected_areas(intersect: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+def watershed_areas(watershed: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """Return areas of the intersection between the catchments and the raster grid.
     If input CRS is not projected, the areas are computed with a custom Equal Earth projection:
     - same ellipsoid as the input CRS,
     - latitude of origin centered on the region of interest
     """
-    if intersect.crs.is_geographic:
+    if watershed.crs.is_geographic:
         # Get data from input
-        ellipsoid = intersect.crs.ellipsoid
-        min_lon, _, max_lon, _ = intersect.total_bounds
+        ellipsoid = watershed.crs.ellipsoid
+        min_lon, _, max_lon, _ = watershed.total_bounds
         mean_lon = (min_lon + max_lon) / 2
         # Create custom CRS
         prime_meridian = pyproj.crs.datum.CustomPrimeMeridian(longitude=mean_lon)
@@ -88,45 +85,56 @@ def get_intersected_areas(intersect: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         )
         assert crs_eqearth.is_projected
         # Apply projection
-        intersect_reproj = intersect.to_crs(crs_eqearth)
+        watershed_reproj = watershed.to_crs(crs_eqearth)
     else:
-        intersect_reproj = intersect
+        watershed_reproj = watershed
 
     # Compute the area
-    intersect["intersected_area"] = intersect_reproj.area
-    return intersect
+    watershed["area"] = watershed_reproj.area
+    return watershed
 
 
-def get_representative_points(intersect: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """Return the representative points of each areas in the input dataframe."""
-    intersect_copy = intersect.copy()
-    intersect_copy["geometry"] = intersect.representative_point()
-    return intersect_copy
+def get_representative_points(polygons: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Return the representative points of each polygon in the input dataframe.
+    The attributes of polygons are preserved."""
+    r_points = polygons.copy()
+    r_points["geometry"] = polygons.representative_point()
+    return r_points
 
 
-def weighted_mean(
+def extract_value_points(
+    dataset: xr.Dataset | xr.DataArray,
+    points: gpd.GeoDataFrame,
+    id: str,
+) -> xr.Dataset:
+    """ Extract values of dataset variables at each representative points."""
+    target_lon = xr.DataArray(points.geometry.x, coords={id: points[id]}, dims=id)
+    target_lat = xr.DataArray(points.geometry.y, coords={id: points[id]}, dims=id)
+    extracted = dataset.sel(longitude=target_lon, latitude=target_lat, method="nearest")
+    return extracted
+
+
+def _weighted_mean(
     dataset: xr.Dataset | xr.DataArray,
     representative_points: gpd.GeoDataFrame,
     catchment_id: str,
     x_coords: str,
     y_coords: str,
 ) -> xr.Dataset:
-    """Compute the weighted mean of each variables in 'dataset'."""
+    """Compute the weighted mean of each variables in 'dataset'. """
     # extract values of dataset variables at each representative points
-    target_lon = xr.DataArray(representative_points.geometry.x, coords={catchment_id: representative_points[catchment_id]}, dims=catchment_id)
-    target_lat = xr.DataArray(representative_points.geometry.y, coords={catchment_id: representative_points[catchment_id]}, dims=catchment_id)
-    extracted = dataset.sel(longitude=target_lon, latitude=target_lat, method="nearest")
+    extracted = extract_value_points(dataset,representative_points,catchment_id)
 
-    # Calculate total catchment area
+    # Calculate total catchment area. 
     representative_points.index = representative_points[catchment_id]
     representative_points.drop(catchment_id, axis=1, inplace=True)
     ds_representative_points = representative_points.to_xarray()
     total_catchment_area = ds_representative_points.groupby(catchment_id).sum()[
-        "intersected_area"
+        "area"
     ]
 
     # Apply area-weighted mean calculation to all data variables
-    area_weighted = extracted * ds_representative_points["intersected_area"]
+    area_weighted = extracted * ds_representative_points["area"]
     sum_by_catchment = area_weighted.groupby(
         catchment_id, restore_coord_dims=True
     ).sum()
@@ -140,7 +148,7 @@ def weighted_mean(
     return val_mean
 
 
-def get_mean_values(
+def mean_values(
     dataset: xr.Dataset | xr.DataArray,
     catchments: gpd.GeoDataFrame,
     catchment_id: str,
@@ -161,15 +169,15 @@ def get_mean_values(
     # TODO: check if catchment_id is present in catchments
 
     # Get the vector grid
-    grid = get_grid_from_dataset(dataset, x_coords, y_coords)
+    grid = polygon_grid_from_dataset(dataset, x_coords, y_coords)
     # Intersect the catchments with the grid
     catchments_grid_intersections = grid.overlay(catchments, how="intersection")
     # Get the surface areas of each sub-catchments
-    intersected_areas = get_intersected_areas(catchments_grid_intersections)
+    intersected_areas = watershed_areas(catchments_grid_intersections)
     # Get representative points for each sub-catchments
     representative_points = get_representative_points(intersected_areas)
     # Finally, calculate the weighted mean
-    ds_mean = weighted_mean(
+    ds_mean = _weighted_mean(
         dataset,
         representative_points,
         catchment_id=catchment_id,
@@ -177,47 +185,3 @@ def get_mean_values(
         y_coords=y_coords,
     )
     return ds_mean
-
-
-
-
-
-
-path="D:/Presas/mean_value/"
-
-# Gridded data file (netcdf/climate data)
-ds_era5 = xr.open_dataset('D:/Presas/mean_value/input/era5_total_precipitation_2023_hourly_118W-86W_14N-34N_ensemble.nc')
-# Fix dtype
-crs = pyproj.CRS.from_epsg(4326)
-ds_era5["tp"] = ds_era5["tp"].astype(np.float32)
-ds_era5["latitude"] = ds_era5["latitude"].astype(np.float32)
-# Set CRS
-ds_era5.attrs["crs_wkt"] = crs.to_wkt()
-
-# Rechunk
-#ds_era5 = ds_era5.chunk({"longitude": -1, "latitude": -1, "number": -1})
-
-# Transform to mm
-ds_era5["tp"] = ds_era5["tp"] * 1000
-
-## Importar el shape de cuencas
-watershed = gpd.read_file(path + 'input/watershed_area.shp')
-watershed.crs = crs
-watershed = watershed[["nodeID", "area", "geometry"]]
-
-
-mean_values = get_mean_values(
-    ds_era5,
-    watershed,
-    catchment_id="nodeID",
-    x_coords="longitude",
-    y_coords="latitude",
-)
-
-mean_values.to_netcdf("D:/Presas/mean_value/x_hidro.nc")
-
-print(mean_values)
-
-
-
-print(f"Elapsed time: {time() - t0:.3f} seconds")
