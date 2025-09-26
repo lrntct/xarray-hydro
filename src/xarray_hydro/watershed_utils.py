@@ -23,7 +23,9 @@ import geopandas as gpd
 import xarray as xr
 import polygongrid as pg
 import pyproj
-
+import shapely
+from time import time
+t0 = time()
 
 def _calculate_res(coords_arr_np: np.ndarray) -> float | None:
     if coords_arr_np is not None and len(coords_arr_np) >= 2:
@@ -51,22 +53,14 @@ def get_grid_from_dataset(
     y_min = dataset[y_coords].min() - res_y / 2
     y_max = dataset[y_coords].max() + res_y / 2
 
-    bounds = (x_min, x_max, y_min, y_max)
-    dim_size = (len(dataset[x_coords]), len(dataset[y_coords]))
+    cols = list(np.arange(x_min, x_max, res_x))
+    rows = list(np.arange(y_min, y_max, res_y))
 
-    # Create the geojson. Any inconsistencies between inputs should raise an error
-    # Might be possible to implement this in house. polygongrid package seems unmaintained.
-    my_grid = pg.PolygonGrid(
-        bounds, step_size=(res_x, res_y), dim_size=dim_size, properties="grid"
-    )
-    my_grid.build_grid()
-    my_grid.build_geojson()
-
-    # GeoJSON to geopandas
+    rings=[shapely.linearrings([[x,y],[x,y+res_y],[x+res_x,y+res_y],[x+res_x,y]]) for x in cols for y in rows]
+    polygons=shapely.polygons([rings])
     ds_crs = pyproj.CRS.from_wkt(dataset.attrs["crs_wkt"])
-    df_grid = gpd.GeoDataFrame.from_features(my_grid.geojson["features"], crs=ds_crs)
-    # drop uneeded columns
-    return df_grid.drop(["cell_id", "row", "column"], axis=1)
+    df_grid = gpd.GeoDataFrame({'geometry':polygons[0]},crs=ds_crs)
+    return df_grid
 
 
 def get_intersected_areas(intersect: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
@@ -119,15 +113,9 @@ def weighted_mean(
 ) -> xr.Dataset:
     """Compute the weighted mean of each variables in 'dataset'."""
     # extract values of dataset variables at each representative points
-    extracted = dataset.xvec.extract_points(
-        representative_points["geometry"],
-        x_coords="longitude",
-        y_coords="latitude",
-        index=False,
-    )
-    # Replace the newly created "geometry" dimension with catchment ID
-    extracted["geometry"] = representative_points[catchment_id].to_numpy()
-    extracted = extracted.rename(geometry=catchment_id)
+    target_lon = xr.DataArray(representative_points.geometry.x, coords={catchment_id: representative_points[catchment_id]}, dims=catchment_id)
+    target_lat = xr.DataArray(representative_points.geometry.y, coords={catchment_id: representative_points[catchment_id]}, dims=catchment_id)
+    extracted = dataset.sel(longitude=target_lon, latitude=target_lat, method="nearest")
 
     # Calculate total catchment area
     representative_points.index = representative_points[catchment_id]
@@ -189,3 +177,47 @@ def get_mean_values(
         y_coords=y_coords,
     )
     return ds_mean
+
+
+
+
+
+
+path="D:/Presas/mean_value/"
+
+# Gridded data file (netcdf/climate data)
+ds_era5 = xr.open_dataset('D:/Presas/mean_value/input/era5_total_precipitation_2023_hourly_118W-86W_14N-34N_ensemble.nc')
+# Fix dtype
+crs = pyproj.CRS.from_epsg(4326)
+ds_era5["tp"] = ds_era5["tp"].astype(np.float32)
+ds_era5["latitude"] = ds_era5["latitude"].astype(np.float32)
+# Set CRS
+ds_era5.attrs["crs_wkt"] = crs.to_wkt()
+
+# Rechunk
+#ds_era5 = ds_era5.chunk({"longitude": -1, "latitude": -1, "number": -1})
+
+# Transform to mm
+ds_era5["tp"] = ds_era5["tp"] * 1000
+
+## Importar el shape de cuencas
+watershed = gpd.read_file(path + 'input/watershed_area.shp')
+watershed.crs = crs
+watershed = watershed[["nodeID", "area", "geometry"]]
+
+
+mean_values = get_mean_values(
+    ds_era5,
+    watershed,
+    catchment_id="nodeID",
+    x_coords="longitude",
+    y_coords="latitude",
+)
+
+mean_values.to_netcdf("D:/Presas/mean_value/x_hidro.nc")
+
+print(mean_values)
+
+
+
+print(f"Elapsed time: {time() - t0:.3f} seconds")
