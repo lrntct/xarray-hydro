@@ -60,8 +60,8 @@ def polygon_grid_from_dataset(
     return df_grid
 
 
-def watershed_areas(watershed: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """Return areas of the intersection between the catchments and the raster grid.
+def polygon_areas(watershed: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Return areas of the polygons.
     If input CRS is not projected, the areas are computed with a custom Equal Earth projection:
     - same ellipsoid as the input CRS,
     - latitude of origin centered on the region of interest
@@ -102,12 +102,12 @@ def get_representative_points(polygons: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     return r_points
 
 
-def extract_value_points(
+def extract_value_at_points(
     dataset: xr.Dataset | xr.DataArray,
     points: gpd.GeoDataFrame,
     id: str,
 ) -> xr.Dataset:
-    """ Extract values of dataset variables at each representative points."""
+    """Extract values of dataset variables at each points."""
     target_lon = xr.DataArray(points.geometry.x, coords={id: points[id]}, dims=id)
     target_lat = xr.DataArray(points.geometry.y, coords={id: points[id]}, dims=id)
     extracted = dataset.sel(longitude=target_lon, latitude=target_lat, method="nearest")
@@ -121,9 +121,9 @@ def _weighted_mean(
     x_coords: str,
     y_coords: str,
 ) -> xr.Dataset:
-    """Compute the weighted mean of each variables in 'dataset'. """
+    """Compute the weighted mean of each variables in 'dataset'."""
     # extract values of dataset variables at each representative points
-    extracted = extract_value_points(dataset,representative_points,catchment_id)
+    extracted = extract_value_at_points(dataset,representative_points,catchment_id)
 
     # Calculate total catchment area. 
     representative_points.index = representative_points[catchment_id]
@@ -139,6 +139,7 @@ def _weighted_mean(
         catchment_id, restore_coord_dims=True
     ).sum()
     val_mean = sum_by_catchment / total_catchment_area
+    val_mean=val_mean.transpose(*extracted.dims)
 
     # Preserve CRS and data type
     val_mean.attrs["crs_wkt"] = dataset.attrs["crs_wkt"]
@@ -172,9 +173,9 @@ def mean_values(
     grid = polygon_grid_from_dataset(dataset, x_coords, y_coords)
     # Intersect the catchments with the grid
     catchments_grid_intersections = grid.overlay(catchments, how="intersection")
-    # Get the surface areas of each sub-catchments
-    intersected_areas = watershed_areas(catchments_grid_intersections)
-    # Get representative points for each sub-catchments
+    # Get the areas of the intersection between the catchments and the raster grid
+    intersected_areas = polygon_areas(catchments_grid_intersections)
+    # Get representative points for each intersected area
     representative_points = get_representative_points(intersected_areas)
     # Finally, calculate the weighted mean
     ds_mean = _weighted_mean(
