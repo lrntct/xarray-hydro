@@ -14,6 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import warnings
+
 # Necessary for weighted mean
 import xvec  # noqa: F401
 import numpy as np
@@ -67,40 +69,6 @@ def get_grid_from_dataset(
     return df_grid.drop(["cell_id", "row", "column"], axis=1)
 
 
-def get_intersected_areas(intersect: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """Return areas of the intersection between the catchments and the raster grid.
-    If input CRS is not projected, the areas are computed with a custom Equal Earth projection:
-    - same ellipsoid as the input CRS,
-    - latitude of origin centered on the region of interest
-    """
-    if intersect.crs.is_geographic:
-        # Get data from input
-        ellipsoid = intersect.crs.ellipsoid
-        min_lon, _, max_lon, _ = intersect.total_bounds
-        mean_lon = (min_lon + max_lon) / 2
-        # Create custom CRS
-        prime_meridian = pyproj.crs.datum.CustomPrimeMeridian(longitude=mean_lon)
-        eq_conversion = pyproj.crs.CoordinateOperation.from_string("+proj=eqearth")
-        custom_datum = pyproj.crs.datum.CustomDatum(
-            ellipsoid=ellipsoid, prime_meridian=prime_meridian
-        )
-        crs_eqearth = pyproj.crs.ProjectedCRS(
-            name=f"Equal Earth projection on {ellipsoid.name} ellipsoid "
-            "and custom prime meridian",
-            conversion=eq_conversion,
-            geodetic_crs=pyproj.crs.GeographicCRS(datum=custom_datum),
-        )
-        assert crs_eqearth.is_projected
-        # Apply projection
-        intersect_reproj = intersect.to_crs(crs_eqearth)
-    else:
-        intersect_reproj = intersect
-
-    # Compute the area
-    intersect["intersected_area"] = intersect_reproj.area
-    return intersect
-
-
 def get_representative_points(intersect: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """Return the representative points of each areas in the input dataframe."""
     intersect_copy = intersect.copy()
@@ -119,8 +87,8 @@ def weighted_mean(
     # extract values of dataset variables at each representative points
     extracted = dataset.xvec.extract_points(
         representative_points["geometry"],
-        x_coords="longitude",
-        y_coords="latitude",
+        x_coords=x_coords,
+        y_coords=y_coords,
         index=False,
     )
     # Replace the newly created "geometry" dimension with catchment ID
@@ -175,9 +143,13 @@ def get_mean_values(
     # Intersect the catchments with the grid
     catchments_grid_intersections = grid.overlay(catchments, how="intersection")
     # Get the surface areas of each sub-catchments
-    intersected_areas = get_intersected_areas(catchments_grid_intersections)
+    with warnings.catch_warnings(category=UserWarning):
+        # We could ignore the warning about calculating area with geographic CRS,
+        # we only care about the relative values of the areas.
+        warnings.simplefilter("ignore")
+        catchments_grid_intersections["intersected_area"] = catchments_grid_intersections.area
     # Get representative points for each sub-catchments
-    representative_points = get_representative_points(intersected_areas)
+    representative_points = get_representative_points(catchments_grid_intersections)
     # Finally, calculate the weighted mean
     ds_mean = weighted_mean(
         dataset,
