@@ -22,10 +22,9 @@ dependencies = [
     "geopandas>=1.1.1",
     "numpy>=2.3.2",
     "pandas>=2.3.2",
-    "polygongrid>=0.1.0",
     "pyproj>=3.7.2",
+    "shapely>=2.1.1",
     "xarray[io,parallel]>=2025.8.0",
-    "xvec>=0.5.1",
     "zarr>=3.1.2",
 ]
 

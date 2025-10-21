@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.13'",
@@ -88,18 +88,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/dc/67/960ebe6bf230a96cda2e0abcf73af550ec4f090005363542f0765df162e0/certifi-2025.8.3.tar.gz", hash = "sha256:e564105f78ded564e3ae7c923924435e1daa7463faeab5bb932bc53ffae63407", size = 162386, upload-time = "2025-08-03T03:07:47.08Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e5/48/1549795ba7742c948d2ad169c1c8cdbae65bc450d6cd753d124b17c8cd32/certifi-2025.8.3-py3-none-any.whl", hash = "sha256:f6c12493cfb1b06ba2ff328595af9350c65d6644968e5d3a2ffd78699af217a5", size = 161216, upload-time = "2025-08-03T03:07:45.777Z" },
-]
-
-[[package]]
-name = "cf-xarray"
-version = "0.10.7"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "xarray" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/b3/b6/a589c565fa21e1da88aa2c5029424ec9300ff40aa7211326c2a7f8107532/cf_xarray-0.10.7.tar.gz", hash = "sha256:fbb6f6db9cb98a75554af916f1c293a041d30e54f60c0cf6c509cf4d55b5af7f", size = 515323, upload-time = "2025-08-13T15:13:26.662Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f5/be/67c78c0d9c49c69f4158c1d796b9bd459b016cd71c6b48c312cc0e38a040/cf_xarray-0.10.7-py3-none-any.whl", hash = "sha256:ccf8151c399dcc236ea11da4f5cccc1a80e7d46bbb8299a3f00ffc21a51e9d40", size = 72960, upload-time = "2025-08-13T15:13:25.277Z" },
 ]
 
 [[package]]
@@ -1292,18 +1280,6 @@ wheels = [
 ]
 
 [[package]]
-name = "polygongrid"
-version = "0.1.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "shapely" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/1a/dc/3b7f5053c4207581fd4643291b1b235964c7143db0a45c385f193e28e3a4/polygongrid-0.1.0.tar.gz", hash = "sha256:adf2786e2df037d4d0334868c9f2913944bd9ca54e0998d645df4a86cd7de732", size = 4980, upload-time = "2021-08-06T21:20:31.315Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/54/4d/030af3196284d223b155cab1e017927eeba856bb0edb4a4d242ef9124d80/polygongrid-0.1.0-py3-none-any.whl", hash = "sha256:6ad37d89570f055d9964507f67e513b347954c133816e31a8bd0ce076e194004", size = 4805, upload-time = "2021-08-06T21:20:29.395Z" },
-]
-
-[[package]]
 name = "pooch"
 version = "1.8.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1990,10 +1966,9 @@ dependencies = [
     { name = "geopandas" },
     { name = "numpy" },
     { name = "pandas" },
-    { name = "polygongrid" },
     { name = "pyproj" },
+    { name = "shapely" },
     { name = "xarray", extra = ["io", "parallel"] },
-    { name = "xvec" },
     { name = "zarr" },
 ]
 
@@ -2010,10 +1985,9 @@ requires-dist = [
     { name = "geopandas", specifier = ">=1.1.1" },
     { name = "numpy", specifier = ">=2.3.2" },
     { name = "pandas", specifier = ">=2.3.2" },
-    { name = "polygongrid", specifier = ">=0.1.0" },
     { name = "pyproj", specifier = ">=3.7.2" },
+    { name = "shapely", specifier = ">=2.1.1" },
     { name = "xarray", extras = ["io", "parallel"], specifier = ">=2025.8.0" },
-    { name = "xvec", specifier = ">=0.5.1" },
     { name = "zarr", specifier = ">=3.1.2" },
 ]
 
@@ -2023,35 +1997,6 @@ dev = [
     { name = "pytest", specifier = ">=8.4.1" },
     { name = "ruff", specifier = ">=0.12.11" },
     { name = "sphinx", specifier = ">=8.2.3" },
-]
-
-[[package]]
-name = "xproj"
-version = "0.2.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pyproj" },
-    { name = "xarray" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/48/33/8c2bcceedfa13122916b6a582eedf9581682dbee329d95bcfb4c69542ade/xproj-0.2.1.tar.gz", hash = "sha256:d520c7a0df402f6a5922108ed614c8ea0ce6b04bec12c91aceb75fe3c1d3c5c3", size = 31781, upload-time = "2025-07-07T09:05:48.022Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/05/b9/b6a9cf72aef69c3e6db869dcc130e19452a658366dac9377f9cd32a76b80/xproj-0.2.1-py3-none-any.whl", hash = "sha256:d762c540c1bc4abc5955b4034b409b9b2f7733c3e49285f3aeb71f9a2dd6bf34", size = 23837, upload-time = "2025-07-07T09:05:46.889Z" },
-]
-
-[[package]]
-name = "xvec"
-version = "0.5.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "cf-xarray" },
-    { name = "pyproj" },
-    { name = "shapely" },
-    { name = "xarray" },
-    { name = "xproj" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a2/2b/e79d62126f672cc8a397c64225ac7aa349f7b2267e95088a518e39fa13e3/xvec-0.5.1.tar.gz", hash = "sha256:ac4af0e4a5ffd3fadcc4fcf927746b528872dc851378dd431a683de1584e0a14", size = 2519992, upload-time = "2025-08-22T08:39:30.302Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/9e/78/55c7ed1be12286c1245fbc0a7c01fe6ebbae4f67276e0d1f7b57ef2ea22e/xvec-0.5.1-py3-none-any.whl", hash = "sha256:d285aab6266b50d5496da5d9f664820e3ef286bc21f5c4e8bb218be48737a1ad", size = 784627, upload-time = "2025-08-22T08:39:28.523Z" },
 ]
 
 [[package]]
