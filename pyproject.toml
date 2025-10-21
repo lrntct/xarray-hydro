@@ -1,5 +1,5 @@
 [project]
-name = "xarray-hydrology"
+name = "xarray-hydro"
 version = "0.1.0"
 description = "Hydrology tools for xarray"
 readme = "README.md"
@@ -10,7 +10,7 @@ authors = [
 license = "Apache-2.0"
 keywords = ["science", "engineering", "hydrology"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Science/Research",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3 :: Only",
@@ -32,7 +32,7 @@ dependencies = [
 [project.urls]
 # Homepage = ""
 # Documentation = ""
-# Repository = ""
+Repository = "https://github.com/lrntct/xarray-hydro"
 # Issues = ""
 
 [dependency-groups]
