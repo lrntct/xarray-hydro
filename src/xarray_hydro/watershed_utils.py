@@ -36,8 +36,8 @@ def _calculate_res(coords_arr_np: np.ndarray) -> float | None:
 
 def polygon_grid_from_dataset(
     dataset: xr.Dataset | xr.DataArray,
-    x_coords: str = "longitude",
-    y_coords: str = "latitude",
+    x_coords: str,
+    y_coords: str,
 ) -> gpd.GeoDataFrame:
     """Take an xarray data structure as an input and return a vector grid as a geodataframe."""
 
@@ -70,13 +70,15 @@ def get_representative_points(polygons: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 
 def extract_value_at_points(
     dataset: xr.Dataset | xr.DataArray,
+    x_coords: str,
+    y_coords: str,
     points: gpd.GeoDataFrame,
     id: str,
 ) -> xr.Dataset:
     """Extract values of dataset variables at each points."""
-    target_lon = xr.DataArray(points.geometry.x, coords={id: points[id]}, dims=id)
-    target_lat = xr.DataArray(points.geometry.y, coords={id: points[id]}, dims=id)
-    extracted = dataset.sel(longitude=target_lon, latitude=target_lat, method="nearest")
+    target_x = xr.DataArray(points.geometry.x, coords={id: points[id]}, dims=id)
+    target_y = xr.DataArray(points.geometry.y, coords={id: points[id]}, dims=id)
+    extracted = dataset.sel({x_coords: target_x, y_coords: target_y}, method="nearest")
     return extracted
 
 
@@ -89,7 +91,7 @@ def _weighted_mean(
 ) -> xr.Dataset:
     """Compute the weighted mean of each variables in 'dataset'."""
     # extract values of dataset variables at each representative points
-    extracted = extract_value_at_points(dataset,representative_points,catchment_id)
+    extracted = extract_value_at_points(dataset, x_coords, y_coords, representative_points, catchment_id)
 
     # Calculate total catchment area. 
     representative_points.index = representative_points[catchment_id]
@@ -119,8 +121,8 @@ def mean_values(
     dataset: xr.Dataset | xr.DataArray,
     catchments: gpd.GeoDataFrame,
     catchment_id: str,
-    x_coords: str = "longitude",
-    y_coords: str = "latitude",
+    x_coords: str,
+    y_coords: str,
 ) -> xr.Dataset:
     """Return the mean value of each dataset variable and each catchment.
     CRS of the dataset is taken from the attribute 'crs_wkt'.

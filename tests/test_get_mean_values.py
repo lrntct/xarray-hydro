@@ -18,7 +18,7 @@ import numpy as np
 
 import pytest
 
-from xarray_hydro.watershed_utils import get_mean_values
+from xarray_hydro.watershed_utils import mean_values
 
 
 def test_mean_values_success(mean_value_data):
@@ -26,7 +26,7 @@ def test_mean_values_success(mean_value_data):
     test_data, catchments, catchment_id = mean_value_data
 
     # Calculate results and convert to pandas DataFrame
-    ds_results = get_mean_values(
+    ds_results = mean_values(
         dataset=test_data,
         catchments=catchments,
         x_coords="lon",
@@ -51,7 +51,7 @@ def test_mean_values_success(mean_value_data):
 def test_crs_mismatch(mismatched_crs_data):
     test_data, catchments, catchment_id = mismatched_crs_data
     with pytest.raises(ValueError, match="crs must match"):
-        get_mean_values(
+        mean_values(
             dataset=test_data,
             catchments=catchments,
             x_coords="lon",
