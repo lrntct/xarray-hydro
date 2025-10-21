@@ -1,20 +1,20 @@
 """
-Copyright [2025] The authors
+Copyright 2025 The authors
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
 
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 """
 
-from copy import deepcopy
+import warnings
 
 # Necessary for weighted mean
 import numpy as np
@@ -58,40 +58,6 @@ def polygon_grid_from_dataset(
     ds_crs = pyproj.CRS.from_wkt(dataset.attrs["crs_wkt"])
     df_grid = gpd.GeoDataFrame({'geometry':polygons[0]},crs=ds_crs)
     return df_grid
-
-
-def polygon_areas(watershed: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """Return areas of the polygons.
-    If input CRS is not projected, the areas are computed with a custom Equal Earth projection:
-    - same ellipsoid as the input CRS,
-    - latitude of origin centered on the region of interest
-    """
-    if watershed.crs.is_geographic:
-        # Get data from input
-        ellipsoid = watershed.crs.ellipsoid
-        min_lon, _, max_lon, _ = watershed.total_bounds
-        mean_lon = (min_lon + max_lon) / 2
-        # Create custom CRS
-        prime_meridian = pyproj.crs.datum.CustomPrimeMeridian(longitude=mean_lon)
-        eq_conversion = pyproj.crs.CoordinateOperation.from_string("+proj=eqearth")
-        custom_datum = pyproj.crs.datum.CustomDatum(
-            ellipsoid=ellipsoid, prime_meridian=prime_meridian
-        )
-        crs_eqearth = pyproj.crs.ProjectedCRS(
-            name=f"Equal Earth projection on {ellipsoid.name} ellipsoid "
-            "and custom prime meridian",
-            conversion=eq_conversion,
-            geodetic_crs=pyproj.crs.GeographicCRS(datum=custom_datum),
-        )
-        assert crs_eqearth.is_projected
-        # Apply projection
-        watershed_reproj = watershed.to_crs(crs_eqearth)
-    else:
-        watershed_reproj = watershed
-
-    # Compute the area
-    watershed["area"] = watershed_reproj.area
-    return watershed
 
 
 def get_representative_points(polygons: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
@@ -173,10 +139,14 @@ def mean_values(
     grid = polygon_grid_from_dataset(dataset, x_coords, y_coords)
     # Intersect the catchments with the grid
     catchments_grid_intersections = grid.overlay(catchments, how="intersection")
-    # Get the areas of the intersection between the catchments and the raster grid
-    intersected_areas = polygon_areas(catchments_grid_intersections)
-    # Get representative points for each intersected area
-    representative_points = get_representative_points(intersected_areas)
+    # Get the surface areas of each sub-catchments
+    with warnings.catch_warnings(category=UserWarning):
+        # We could ignore the warning about calculating area with geographic CRS,
+        # we only care about the relative values of the areas.
+        warnings.simplefilter("ignore")
+        catchments_grid_intersections["area"] = catchments_grid_intersections.area
+    # Get representative points for each sub-catchments
+    representative_points = get_representative_points(catchments_grid_intersections)
     # Finally, calculate the weighted mean
     ds_mean = _weighted_mean(
         dataset,
