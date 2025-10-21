@@ -1,0 +1,31 @@
+name: tests
+
+on:
+  push:
+    branches: [ "main"]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]  # pyarrow is not compatible (yet) with 3.14
+
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y gdal-bin libgdal-dev
+
+    - name: Install uv and Python
+      run: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        $HOME/.local/bin/uv python install ${{ matrix.python-version }}
+
+    - name: Pytest
+      run: |
+        $HOME/.local/bin/uv run --all-extras --python ${{ matrix.python-version }} pytest --junitxml=junit/test-results.xml
