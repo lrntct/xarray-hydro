@@ -10,3 +10,10 @@ Work in progress.
 uv sync
 uv pip install -e .
 ```
+
+## Run tests
+
+```bash
+pytest tests/
+```
+
