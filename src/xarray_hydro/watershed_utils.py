@@ -53,10 +53,16 @@ def polygon_grid_from_dataset(
     cols = list(np.arange(x_min, x_max, res_x))
     rows = list(np.arange(y_min, y_max, res_y))
 
-    rings=[shapely.linearrings([[x,y],[x,y+res_y],[x+res_x,y+res_y],[x+res_x,y]]) for x in cols for y in rows]
-    polygons=shapely.polygons([rings])
+    rings = [
+        shapely.linearrings(
+            [[x, y], [x, y + res_y], [x + res_x, y + res_y], [x + res_x, y]]
+        )
+        for x in cols
+        for y in rows
+    ]
+    polygons = shapely.polygons([rings])
     ds_crs = pyproj.CRS.from_wkt(dataset.attrs["crs_wkt"])
-    df_grid = gpd.GeoDataFrame({'geometry':polygons[0]},crs=ds_crs)
+    df_grid = gpd.GeoDataFrame({"geometry": polygons[0]}, crs=ds_crs)
     return df_grid
 
 
@@ -91,15 +97,15 @@ def _weighted_mean(
 ) -> xr.Dataset:
     """Compute the weighted mean of each variables in 'dataset'."""
     # extract values of dataset variables at each representative points
-    extracted = extract_value_at_points(dataset, x_coords, y_coords, representative_points, catchment_id)
+    extracted = extract_value_at_points(
+        dataset, x_coords, y_coords, representative_points, catchment_id
+    )
 
-    # Calculate total catchment area. 
+    # Calculate total catchment area.
     representative_points.index = representative_points[catchment_id]
     representative_points.drop(catchment_id, axis=1, inplace=True)
     ds_representative_points = representative_points.to_xarray()
-    total_catchment_area = ds_representative_points.groupby(catchment_id).sum()[
-        "area"
-    ]
+    total_catchment_area = ds_representative_points.groupby(catchment_id).sum()["area"]
 
     # Apply area-weighted mean calculation to all data variables
     area_weighted = extracted * ds_representative_points["area"]
@@ -107,7 +113,7 @@ def _weighted_mean(
         catchment_id, restore_coord_dims=True
     ).sum()
     val_mean = sum_by_catchment / total_catchment_area
-    val_mean=val_mean.transpose(*extracted.dims)
+    val_mean = val_mean.transpose(*extracted.dims)
 
     # Preserve CRS and data type
     val_mean.attrs["crs_wkt"] = dataset.attrs["crs_wkt"]
@@ -158,4 +164,3 @@ def mean_values(
         y_coords=y_coords,
     )
     return ds_mean
-    
