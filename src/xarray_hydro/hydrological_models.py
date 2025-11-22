@@ -1,145 +1,118 @@
 import numpy as np
 import xarray as xr
+from typing import TypedDict
+from typing import Optional
 
-def HBV(
-    P: xr.DataArray,
-    T: xr.DataArray,
-    ETP: xr.DataArray,
-    parameters:xr.Dataset,
-) -> xr.DataArray:
+# Set up the dictionary structure by defining the TypedDict.
+class UserProfile(TypedDict):
+    dim_time: str # Time dimension name
+    precipitation: str # mm/Δt
+    temperature: str # °C
+    pot_evapotr: str # mm/Δt
+    par_BETA:str # parameter that determines the relative contribution to runoff from rain or snowmelt
+    par_FC:str # maximum soil moisture storage (mm)
+    par_K0:str # storage (or recession) coefficient 0 (∆t-1)
+    par_K1:str # storage (or recession) coefficient 1 (∆t-1)
+    par_K2:str # storage (or recession) coefficient 2 (∆t-1)
+    par_LP:str # soil moisture value above which AET reaches PET
+    par_PERC:str # treshold parameter (Mm ∆t-1)
+    par_UZL:str # treshold parameter (mm)
+    par_TT:str #  threshold temperature (°C)
+    par_CFMAX:str # degree-Δt factor (°C-1 ∆t-1)
+    par_CFR:str # refreezing coefficient
+    par_CWH:str # water holding capacity
+    par_PCORR:str # precipitation correction factor
+    par_SFCF:str # snowfall correction factor
+
+class hbvl:
     """
     Application of the HBV-light semi-distributed hydrological model (Seibert & Vis, 2012)
-    Inputs:
-        P = Precipitation (mm/Δt)
-        ETP = Potential evapotranspiration (mm/Δt)
-        T = Temperature (°C)
-        parameters = Dataset with the variables: BETA, FC, K0, K1, K2, LP, PERC, UZL, TT, CFMAX, CFR, CWH, PCORR and SFCF.
-    Output:
-        Qhbv = Streamflow (mm/Δt).
-    - The input variables and parameters must have the same watershed ID dimension. 
-    - Time must be the first dimension of the input variables.
+    input_data = Dataset with the variables:
+        - Precipitation (mm/Δt)
+        - Temperature (°C)
+        - pot_evapotr = ETPotential evapotranspiration (mm/Δt)
+    parameters = Dataset with the parameters: BETA, FC, K0, K1, K2, LP, PERC, UZL, TT, CFMAX, CFR, CWH, PCORR and SFCF.
+    - The input_data and parameters must have the same watershed ID dimension. 
     - Time interval (Δt) can be on a daily basis, hourly basis, or any other.
     - K0,K1,K2,PERC,CFMAX depend on time. If you possess parameter values, but their time interval 
       differs from the run time interval, you must initially convert the time unit of these parameters.
     - The values for PCORR and SFCF can be 1 if you don't have them.
-    """
-    # Initialize time series of model variables
-    SNOWPACK = xr.zeros_like(parameters['BETA'], dtype=float)+0.001
-    MELTWATER = xr.zeros_like(parameters['BETA'], dtype=float)+0.001
-    SM = xr.zeros_like(parameters['BETA'], dtype=float)+0.001
-    SUZ = xr.zeros_like(parameters['BETA'], dtype=float)+0.001
-    SLZ = xr.zeros_like(parameters['BETA'], dtype=float)+0.001
-    ETact = xr.zeros_like(parameters['BETA'], dtype=float)+0.001
-    Qhbv = xr.zeros_like(P*parameters['BETA'], dtype=float)
-    
-    for t in range(0, P.shape[0]):
-        
-        # Separate precipitation into liquid and solid components
-        PREC = P[t]*parameters['PCORR']
-        RAIN = PREC*(T[t] >= parameters['TT'])
-        SNOW =PREC*(T[t] < parameters['TT'])
-        SNOW = SNOW*parameters['SFCF']
-        
-        # Snow
-        SNOWPACK = SNOWPACK+SNOW
-        melt = parameters['CFMAX']*(T[t]-parameters['TT'])
-        melt = melt.clip(0.0, SNOWPACK)
-        MELTWATER = MELTWATER+melt
-        SNOWPACK = SNOWPACK-melt
-        refreezing_meltwater = parameters['CFR'] * parameters['CFMAX'] * (parameters['TT']-T[t])
-        refreezing_meltwater = refreezing_meltwater.clip(0.0, MELTWATER)
-        SNOWPACK = SNOWPACK+refreezing_meltwater
-        MELTWATER = MELTWATER-refreezing_meltwater
-        tosoil = MELTWATER - (parameters['CWH']*SNOWPACK)
-        tosoil = tosoil.clip(0.0, None)
-        MELTWATER = MELTWATER-tosoil
-
-        # Soil and evaporation
-        soil_wetness = (SM/parameters['FC']) ** parameters['BETA']
-        soil_wetness = soil_wetness.clip(0.0, 1.0)
-        recharge = (RAIN+tosoil) * soil_wetness
-        SM = SM+RAIN+tosoil-recharge
-        excess = SM-parameters['FC']
-        excess = excess.clip(0.0, None)
-        SM = SM-excess
-        evapfactor = SM / (parameters['LP']*parameters['FC'])
-        evapfactor = evapfactor.clip(0.0, 1.0)
-        ETact = ETP[t]*evapfactor
-        ETact = np.minimum(SM, ETact)
-        SM = SM-ETact
-
-        # Groundwater boxes
-        SUZ = SUZ+recharge+excess
-        PERC = np.minimum(SUZ, parameters['PERC'])
-        SUZ = SUZ-PERC
-        Q0 = parameters['K0']*np.maximum(SUZ-parameters['UZL'], 0.0)
-        SUZ = SUZ-Q0
-        Q1 = parameters['K1']*SUZ
-        SUZ = SUZ-Q1
-        SLZ = SLZ+PERC
-        Q2 = parameters['K2']*SLZ
-        SLZ = SLZ-Q2
-        Qhbv[t] = Q0+Q1+Q2
-    return Qhbv.to_dataset(name="Q")
-
-
-def HBV_snowless(
-    P: xr.DataArray,
-    ETP: xr.DataArray,
-    parameters:xr.Dataset,
-) -> xr.DataArray:
-    """
-    Application of the HBV-light semi-distributed hydrological model (Seibert & Vis, 2012), without the snow routine.
-    Inputs:
-        P = Precipitation (mm/Δt)
-        ETP = Potential evapotranspiration (mm/Δt)
-        parameters = Dataset with the variables: BETA, FC, K0, K1, K2, LP, PERC, UZL, TT, CFMAX, CFR, CWH and PCORR .
     Output:
         Qhbv = Streamflow (mm/Δt).
-    - The input variables and parameters must have the same watershed ID dimension. 
-    - Time must be the first dimension of the input variables.
-    - Time interval (Δt) can be on a daily basis, hourly basis, or any other.
-    - K0,K1,K2,PERC,CFMAX depend on time. If you possess parameter values, but their time interval 
-      differs from the run time interval, you must initially convert the time unit of these parameters.
-    - The value for PCORR can be 1 if you don't have one.    
     """
-    # Initialize time series of model variables
-    SM = xr.zeros_like(parameters['BETA'], dtype=float)+0.001
-    SUZ = xr.zeros_like(parameters['BETA'], dtype=float)+0.001
-    SLZ = xr.zeros_like(parameters['BETA'], dtype=float)+0.001
-    ETact = xr.zeros_like(parameters['BETA'], dtype=float)+0.001
-    Qhbv = xr.zeros_like(P*parameters['BETA'], dtype=float)
+    def __init__(self, input_data: xr.Dataset, parameters: xr.Dataset, data_name: UserProfile, snow: Optional[bool] = None):
+        # Anotación de tipo para el atributo de instancia
+        self.input_data = input_data
+        self.parameters = parameters
+        self.data_name = data_name
+        self.snow = snow
     
-    for t in range(0, P.shape[0]):
-        RAIN = P[t]*parameters['PCORR']
-        
-        # Soil and evaporation
-        soil_wetness = (SM/parameters['FC']) ** parameters['BETA']
-        soil_wetness = soil_wetness.clip(0.0, 1.0)
-        recharge = (RAIN) * soil_wetness
-        SM = SM+RAIN-recharge
-        excess = SM-parameters['FC']
-        excess = excess.clip(0.0, None)
-        SM = SM-excess
-        evapfactor = SM / (parameters['LP']*parameters['FC'])
-        evapfactor = evapfactor.clip(0.0, 1.0)
-        ETact = ETP[t]*evapfactor
-        ETact = np.minimum(SM, ETact)
-        SM = SM-ETact
+        # Initialize time series of model variables
+        self.SNOWPACK = xr.full_like(self.parameters[self.data_name['par_BETA']], 1e-6, dtype=np.float64)
+        self.MELTWATER = xr.full_like(self.parameters[self.data_name['par_BETA']], 1e-6, dtype=np.float64)
+        self.SM = xr.full_like(self.parameters[self.data_name['par_BETA']], 1e-6, dtype=np.float64)
+        self.SUZ = xr.full_like(self.parameters[self.data_name['par_BETA']], 1e-6, dtype=np.float64)
+        self.SLZ = xr.full_like(self.parameters[self.data_name['par_BETA']], 1e-6, dtype=np.float64)
+        self.ETact = xr.full_like(self.parameters[self.data_name['par_BETA']], 1e-6, dtype=np.float64)
+        self.Qhbvl = xr.full_like(self.parameters[self.data_name['par_BETA']]*self.input_data[self.data_name["precipitation"]], 1e-6, dtype=np.float64)
+    
+    def calc_Streamflow(self):
+        for t in self.input_data[self.data_name["precipitation"]][self.data_name["dim_time"]].to_numpy(): 
 
-        # Groundwater boxes
-        SUZ = SUZ+recharge+excess
-        PERC = np.minimum(SUZ, parameters['PERC'])
-        SUZ = SUZ-PERC
-        Q0 = parameters['K0']*np.maximum(SUZ-parameters['UZL'], 0.0)
-        SUZ = SUZ-Q0
-        Q1 = parameters['K1']*SUZ
-        SUZ = SUZ-Q1
-        SLZ = SLZ+PERC
-        Q2 = parameters['K2']*SLZ
-        SLZ = SLZ-Q2
-        Qhbv[t] = Q0+Q1+Q2
-    return Qhbv.to_dataset(name="Q")
+            if self.snow:            
+                # Separate precipitation into liquid and solid components
+                PREC = self.input_data[self.data_name["precipitation"]].sel({self.data_name["dim_time"]:t}) * self.parameters[self.data_name['par_PCORR']]
+                RAIN = PREC*(self.input_data[self.data_name["temperature"]].sel({self.data_name["dim_time"]:t}) >= self.parameters['TT'])
+                SNOW = PREC*(self.input_data[self.data_name["temperature"]].sel({self.data_name["dim_time"]:t}) < self.parameters['TT'])
+                SNOW = SNOW*self.parameters['par_SFCF']
+                
+                # Snow
+                self.SNOWPACK = self.SNOWPACK+SNOW
+                melt = self.parameters['par_CFMAX'] * (self.input_data[self.data_name["temperature"]].sel({self.data_name["dim_time"]:t})-self.parameters['TT'])
+                melt = melt.clip(0.0, self.SNOWPACK)
+                self.MELTWATER = self.MELTWATER + melt
+                self.SNOWPACK = self.SNOWPACK - melt
+                refreezing_meltwater = self.parameters['par_CFR'] * self.parameters['par_CFMAX'] * (self.parameters['par_TT'] - self.input_data[self.data_name["temperature"]].sel({self.data_name["dim_time"]:t}))
+                refreezing_meltwater = refreezing_meltwater.clip(0.0, self.MELTWATER)
+                self.SNOWPACK = self.SNOWPACK + refreezing_meltwater
+                self.MELTWATER = self.MELTWATER - refreezing_meltwater
+                tosoil = self.MELTWATER - (self.parameters['par_CWH']*self.SNOWPACK)
+                tosoil = tosoil.clip(0.0, None)
+                self.MELTWATER = self.MELTWATER-tosoil
+
+            else:
+                RAIN = self.input_data[self.data_name["precipitation"]].sel({self.data_name["dim_time"]:t}) * self.parameters[self.data_name['par_PCORR']]
+                tosoil = 0
+
+            # Soil and evaporation
+            soil_wetness = (self.SM / self.parameters[self.data_name['par_FC']]) ** self.parameters[self.data_name['par_BETA']]
+            soil_wetness = soil_wetness.clip(0.0, 1.0)        
+            recharge = (RAIN) * soil_wetness        
+            self.SM = self.SM+RAIN-recharge        
+            excess = self.SM-self.parameters[self.data_name['par_FC']]
+            excess = excess.clip(0.0, None)       
+            self.SM = self.SM-excess
+            evapfactor = self.SM / (self.parameters[self.data_name['par_LP']] * self.parameters[self.data_name['par_FC']])        
+            evapfactor = evapfactor.clip(0.0, 1.0)
+            self.ETact = self.input_data[self.data_name["pot_evapotr"]].sel({self.data_name["dim_time"]:t}) * evapfactor        
+            self.ETact = np.minimum(self.SM, self.ETact)
+            self.SM = self.SM-self.ETact
+            
+            # Groundwater boxes
+            self.SUZ = self.SUZ + recharge+excess
+            PERC = np.minimum(self.SUZ, self.parameters[self.data_name['par_PERC']])
+            self.SUZ = self.SUZ - PERC
+            Q0 = self.parameters[self.data_name['par_K0']] * np.maximum(self.SUZ-self.parameters[self.data_name['par_UZL']], 0.0)
+            self.SUZ = self.SUZ - Q0
+            Q1 = self.parameters[self.data_name['par_K1']] * self.SUZ
+            self.SUZ = self.SUZ - Q1
+            self.SLZ = self.SLZ + PERC
+            Q2 = self.parameters[self.data_name['par_K2']] * self.SLZ            
+            self.SLZ = self.SLZ-Q2
+            
+            self.Qhbvl.loc[dict({self.data_name["dim_time"]:t})] = Q0 + Q1 + Q2
+        
+        return self.Qhbvl.to_dataset(name="Q")
 
 
 def Q_to_cms(
@@ -162,9 +135,10 @@ def _routing_maxbas(
     m: xr.DataArray,
 ) -> xr.DataArray:
     """
-    Triangular weight function.
-    Q = Streamflow. Must contain the dimension of maxbas.
-    m = MAXBAS is the routing parameter (Δt).
+    Routing routine simulates the delay and attenuation of runoff as it travels through a basin,
+    using a triangular weighting function, where c is the coefficient or weight in each time interval,
+    and maxbas is the total number of time steps that define the base length of the triangle.
+    Q = Streamflow. Previously, the dimensions of maxbas must be transferred to the Q dataset.
     """
     Qm = np.zeros_like(Q)
     for i in range(1,m+1):     
